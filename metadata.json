@@ -1,0 +1,6 @@
+{
+  "name": "SkillBridge AI",
+  "description": "The Career Navigation and Growth Operating System that helps students discover, plan, build, and achieve their ideal careers.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
