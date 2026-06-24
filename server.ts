@@ -6,36 +6,29 @@
 import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
-import { GoogleGenAI, Type } from '@google/genai';
+import Groq from 'groq-sdk';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = 3001;
 
 app.use(express.json());
 
-// Initialize Gemini Client safely
-let ai: GoogleGenAI | null = null;
-const apiKey = process.env.GEMINI_API_KEY;
+// Initialize Groq client safely
+let groq: Groq | null = null;
+const apiKey = process.env.GROQ_API_KEY;
 
-if (apiKey && apiKey !== 'MY_GEMINI_API_KEY') {
+if (apiKey && apiKey !== 'MY_GROQ_API_KEY') {
   try {
-    ai = new GoogleGenAI({
-      apiKey: apiKey,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
-        },
-      },
-    });
-    console.log('Gemini API client initialized successfully.');
+    groq = new Groq({ apiKey });
+    console.log('Groq API client initialized successfully.');
   } catch (err) {
-    console.error('Failed to initialize Gemini API client:', err);
+    console.error('Failed to initialize Groq API client:', err);
   }
 } else {
-  console.log('No valid GEMINI_API_KEY found. Utilizing intelligent local simulation logic.');
+  console.log('No valid GROQ_API_KEY found. Utilizing intelligent local simulation logic.');
 }
 
 // Robust fallback static generators tailored for high fidelity student path choices across ECE, Mechanical, Business, Design, Biotech, Law, and CS
@@ -628,9 +621,9 @@ app.post('/api/analyze-profile', async (req, res) => {
     return res.status(400).json({ error: 'Profile data is missing' });
   }
 
-  // If no AI initialized, yield fallback
-  if (!ai) {
-    console.log('Gemini API client not initialized. Falling back to local high-fidelity generator.');
+  // If no Groq client initialized, yield fallback
+  if (!groq) {
+    console.log('Groq API client not initialized. Falling back to local high-fidelity generator.');
     return res.json(getFallbackAnalysis(profile));
   }
 
@@ -661,164 +654,13 @@ Provide:
 Ensure the response strictly complies with JSON syntax. Do NOT prepend or postpend HTML markers or markdown blockquotes other than pure JSON.
 `;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.5-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            careerFits: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  role: { type: Type.STRING },
-                  matchPercentage: { type: Type.INTEGER },
-                  description: { type: Type.STRING },
-                  suitabilityReason: { type: Type.STRING }
-                },
-                required: ['role', 'matchPercentage', 'description', 'suitabilityReason']
-              }
-            },
-            skillGap: {
-              type: Type.OBJECT,
-              properties: {
-                strengths: { type: Type.ARRAY, items: { type: Type.STRING } },
-                missingSkills: { type: Type.ARRAY, items: { type: Type.STRING } },
-                improvementAreas: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      skill: { type: Type.STRING },
-                      description: { type: Type.STRING },
-                      severity: { type: Type.STRING } // High, Medium, Low
-                    },
-                    required: ['skill', 'description', 'severity']
-                  }
-                }
-              },
-              required: ['strengths', 'missingSkills', 'improvementAreas']
-            },
-            roadmap: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  month: { type: Type.INTEGER },
-                  title: { type: Type.STRING },
-                  focus: { type: Type.STRING },
-                  milestones: { type: Type.ARRAY, items: { type: Type.STRING } },
-                  weeklyPlans: {
-                    type: Type.ARRAY,
-                    items: {
-                      type: Type.OBJECT,
-                      properties: {
-                        week: { type: Type.INTEGER },
-                        tasks: {
-                          type: Type.ARRAY,
-                          items: {
-                            type: Type.OBJECT,
-                            properties: {
-                              id: { type: Type.STRING },
-                              text: { type: Type.STRING },
-                              skillToAcquire: { type: Type.STRING },
-                              completed: { type: Type.BOOLEAN }
-                            },
-                            required: ['id', 'text', 'skillToAcquire', 'completed']
-                          }
-                        }
-                      },
-                      required: ['week', 'tasks']
-                    }
-                  }
-                },
-                required: ['month', 'title', 'focus', 'milestones', 'weeklyPlans']
-              }
-            },
-            recommendedProjects: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  id: { type: Type.STRING },
-                  title: { type: Type.STRING },
-                  description: { type: Type.STRING },
-                  difficulty: { type: Type.STRING }, // Beginner, Intermediate, Advanced
-                  industryRelevance: { type: Type.STRING },
-                  skillsAcquired: { type: Type.ARRAY, items: { type: Type.STRING } },
-                  estimatedHours: { type: Type.INTEGER },
-                },
-                required: ['id', 'title', 'description', 'difficulty', 'industryRelevance', 'skillsAcquired', 'estimatedHours']
-              }
-            },
-            opportunities: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  id: { type: Type.STRING },
-                  type: { type: Type.STRING }, // Internship, Hackathon, Competition, Scholarship
-                  title: { type: Type.STRING },
-                  organization: { type: Type.STRING },
-                  deadline: { type: Type.STRING },
-                  eligibility: { type: Type.STRING },
-                  relevanceMatch: { type: Type.INTEGER },
-                  skillsRequired: { type: Type.ARRAY, items: { type: Type.STRING } }
-                },
-                required: ['id', 'type', 'title', 'organization', 'deadline', 'eligibility', 'relevanceMatch', 'skillsRequired']
-              }
-            },
-            careerTwin: {
-              type: Type.OBJECT,
-              properties: {
-                currentStatus: { type: Type.STRING },
-                projectedGrowth: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      label: { type: Type.STRING },
-                      score: { type: Type.INTEGER }
-                    },
-                    required: ['label', 'score']
-                  }
-                },
-                successProbability: { type: Type.INTEGER },
-                alternativePaths: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      role: { type: Type.STRING },
-                      probability: { type: Type.INTEGER },
-                      gapToBridge: { type: Type.STRING }
-                    },
-                    required: ['role', 'probability', 'gapToBridge']
-                  }
-                },
-                forecastSummary: { type: Type.STRING }
-              },
-              required: ['currentStatus', 'projectedGrowth', 'successProbability', 'alternativePaths', 'forecastSummary']
-            },
-            scores: {
-              type: Type.OBJECT,
-              properties: {
-                careerReadiness: { type: Type.INTEGER },
-                portfolioStrength: { type: Type.INTEGER },
-                skillCoverage: { type: Type.INTEGER },
-                employability: { type: Type.INTEGER }
-              },
-              required: ['careerReadiness', 'portfolioStrength', 'skillCoverage', 'employability']
-            }
-          }
-        }
-      }
+    const response = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: [{ role: 'user', content: prompt }],
+      response_format: { type: 'json_object' },
     });
 
-    const resultText = response.text || '';
+    const resultText = response.choices[0]?.message?.content || '';
     const parsedData = JSON.parse(resultText.trim());
     
     // Supplement some default statuses to allow UI mutation
@@ -833,7 +675,7 @@ Ensure the response strictly complies with JSON syntax. Do NOT prepend or postpe
       recommendedProjects: modifiedProjects
     });
   } catch (err) {
-    console.error('Gemini content generation failed, falling back to offline analytics:', err);
+    console.error('Groq content generation failed, falling back to offline analytics:', err);
     return res.json(getFallbackAnalysis(profile));
   }
 });
@@ -847,7 +689,7 @@ app.post('/api/chat', async (req, res) => {
 
   const targetRole = profile?.careerTarget || 'Target Role';
 
-  if (!ai) {
+  if (!groq) {
     // Generate a simple, tailored response offline
     let responseText = `As your Career GPS Strategist, I'm analyzing your progress toward becoming a ${targetRole}. `;
     
@@ -867,27 +709,29 @@ app.post('/api/chat', async (req, res) => {
 
   try {
     const chatHistory = (messages || []).map((msg: any) => ({
-      role: msg.sender === 'user' ? 'user' : 'model',
-      parts: [{ text: msg.text }]
+      role: msg.sender === 'user' ? 'user' : 'assistant',
+      content: msg.text
     }));
 
-    // Start Chat
-    const chat = ai.chats.create({
-      model: 'gemini-3.5-flash',
-      config: {
-        systemInstruction: `You are the Career GPS Strategist assistant for SkillBridge AI (tagline: "Navigate Your Future"). 
+    const response = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: [
+        {
+          role: 'system',
+          content: `You are the Career GPS Strategist assistant for SkillBridge AI (tagline: "Navigate Your Future"). 
 You are speaking to ${profile?.name || 'a student'}, who is studying ${profile?.branch || 'their major'} for a degree in ${profile?.degree || 'their field of interest'} (Current Semester ${profile?.currentSemester || 'Ongoing'}).
 Their profile currently consists of skills: ${profile?.skills?.join(', ') || 'None provided yet'}, and interests: ${profile?.interests?.join(', ') || 'None provided yet'}.
 Their target career is: ${profile?.careerTarget || 'Technology/Leadership'}.
 
 Your job is to provide highly constructive, personalized, and encouraging guidance based on their profile. Always refer to concepts like the "Digital Career Twin" (predicting growth outcomes), "Portfolio Strength Score", "Employability Score", and tracking their "Career Readiness" metrics.
-Respond in a friendly, conversational, yet authoritative educational demeanor. Keep text structure organized with brief bullet points where necessary.`,
-      },
-      history: chatHistory
+Respond in a friendly, conversational, yet authoritative educational demeanor. Keep text structure organized with brief bullet points where necessary.`
+        },
+        ...chatHistory,
+        { role: 'user', content: latestMessage }
+      ]
     });
 
-    const response = await chat.sendMessage({ message: latestMessage });
-    return res.json({ text: response.text || '' });
+    return res.json({ text: response.choices[0]?.message?.content || '' });
   } catch (err) {
     console.error('Chat AI generation failed:', err);
     return res.status(500).json({ error: 'AI Assistant could not compile a response. Feel free to try again.' });
