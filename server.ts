@@ -761,4 +761,10 @@ async function startServer() {
   });
 }
 
-startServer();
+// Only start the server when run directly (not imported as module on Vercel)
+const isVercel = process.env.VERCEL === '1';
+if (!isVercel) {
+  startServer();
+}
+
+export default app;
